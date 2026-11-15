@@ -46,7 +46,7 @@ trait HandlesToolApprovals
     }
 
     /**
-     * Append a resume's tool results, merging into the pause turn's partial results so one assistant turn keeps one answering message.
+     * Append a resume's tool results, merging into the pause turn's partial results so one assistant turn keeps one answering message, in call order.
      *
      * @param  Message[]  $messages
      * @param  array<int, ToolResult>  $toolResults
@@ -62,11 +62,33 @@ trait HandlesToolApprovals
             $toolResults = [...$last->toolResults->all(), ...$toolResults];
         }
 
-        $answer = new ToolResultMessage(collect($toolResults));
+        $answer = new ToolResultMessage($this->inCallOrder(collect($toolResults), $messages));
 
         $messages[] = $answer;
 
         return [$messages, [$answer]];
+    }
+
+    /**
+     * Order the results as the latest assistant turn made the calls they answer.
+     *
+     * @param  Collection<int, ToolResult>  $toolResults
+     * @param  Message[]  $messages
+     * @return Collection<int, ToolResult>
+     */
+    protected function inCallOrder(Collection $toolResults, array $messages): Collection
+    {
+        $assistant = $messages[$this->latestAssistantTurnIndex($messages)] ?? null;
+
+        if (! $assistant instanceof AssistantMessage) {
+            return $toolResults;
+        }
+
+        $position = $assistant->toolCalls->pluck('id')->flip();
+
+        return $toolResults
+            ->sortBy(fn (ToolResult $result) => $position[$result->id] ?? PHP_INT_MAX)
+            ->values();
     }
 
     /**

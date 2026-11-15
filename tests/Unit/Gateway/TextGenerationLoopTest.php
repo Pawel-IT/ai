@@ -203,7 +203,7 @@ test('it emits streamed approval requests without executing gated tools', functi
         ->and(collect($events)->whereInstanceOf(StreamEnd::class))->toHaveCount(1);
 });
 
-test('it resumes a paused step running only the still-pending gated call', function (): void {
+test('it resumes a paused step running only the still-pending gated call, answering in call order', function (): void {
     $gated = new TextGenerationLoopApprovableTool;
     $ungated = new TextGenerationLoopCountingTool;
     $gatedCall = new ToolCall('call-gated', TextGenerationLoopApprovableTool::class, ['value' => 'approved'], 'call-gated');
@@ -233,7 +233,8 @@ test('it resumes a paused step running only the still-pending gated call', funct
     expect($gated->calls)->toBe(1)
         ->and($ungated->calls)->toBe(0)
         ->and($response->hasPendingApprovals())->toBeFalse()
-        ->and($response->toolResults->pluck('id')->all())->toBe(['call-ungated', 'call-gated'])
+        ->and($response->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
+        ->and(collect($gateway->messages[0])->whereInstanceOf(ToolResultMessage::class)->sole()->toolResults->pluck('id')->all())->toBe(['call-gated', 'call-ungated'])
         ->and($response->text)->toBe('done');
 });
 
